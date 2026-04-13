@@ -22,7 +22,11 @@ const stockUpdateSchema = new mongoose.Schema({
   parsedData: {
     type: mongoose.Schema.Types.Mixed
   },
-  from: String, // Phone number or user ID
+  from: String, // Phone number or source string
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   previousStock: Number,
   newStock: Number,
   timestamp: {

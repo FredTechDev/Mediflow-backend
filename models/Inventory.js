@@ -10,7 +10,10 @@ const consumptionSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
-  recordedBy: String,
+  recordedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   notes: String
 });
 

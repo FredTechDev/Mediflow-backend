@@ -7,6 +7,7 @@ const inventoryRoutes = require('./routes/inventory');
 const predictionRoutes = require('./routes/predictions');
 const smsRoutes = require('./routes/sms');
 const redistributionRoutes = require('./routes/redistribution');
+const authRoutes = require('./routes/auth');
 const { errorHandler } = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
 
@@ -44,6 +45,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/predictions', predictionRoutes);
 app.use('/api/sms', smsRoutes);
 app.use('/api/redistribution', redistributionRoutes);
+app.use('/api/auth', authRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
