@@ -24,7 +24,7 @@ const testRBAC = async () => {
         // missing facilityId
       });
     } catch (err) {
-      console.log('✅ Correctly blocked Pharmacist without facilityId');
+      console.log('Correctly blocked Pharmacist without facilityId');
     }
 
     // 2. Test Government registration (Does NOT require facilityId)
@@ -34,18 +34,18 @@ const testRBAC = async () => {
       password: 'password123',
       role: ROLES.GOVERNMENT
     });
-    console.log('✅ Successfully created Government user without facilityId');
+    console.log('Successfully created Government user without facilityId');
 
     // 3. Test Password Hashing
     const user = await User.findOne({ email: 'gov@test.com' }).select('+password');
     if (user.password !== 'password123' && user.password.startsWith('$2a$')) {
-      console.log('✅ Password correctly hashed');
+      console.log('Password correctly hashed');
     }
 
     // 4. Test Password Matching
     const isMatch = await govUser.matchPassword('password123');
     if (isMatch) {
-      console.log('✅ Password matching works');
+      console.log('Password matching works');
     }
 
     await mongoose.connection.close();

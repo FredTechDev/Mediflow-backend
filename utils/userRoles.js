@@ -3,7 +3,8 @@ const ROLES = {
   PHARMACIST: 'pharmacist',
   MANAGER: 'manager',
   SUPPLY_OFFICER: 'supply_officer',
-  GOVERNMENT: 'government'
+  GOVERNMENT: 'government',
+  DOCTOR: 'doctor'
 };
 
 module.exports = ROLES;

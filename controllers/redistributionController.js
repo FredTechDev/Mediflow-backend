@@ -1,5 +1,6 @@
 const Inventory = require('../models/Inventory');
 const Facility = require('../models/Facility');
+const Alert = require('../models/Alert');
 
 const findSurplusAndShortage = async (req, res) => {
   try {
@@ -132,4 +133,41 @@ const generateTransferPlan = async (req, res) => {
   }
 };
 
-module.exports = {findSurplusAndShortage, generateTransferPlan,}
+const requestUrgentSupply = async (req, res) => {
+  try {
+    const { facilityId, drugName, reason, quantity } = req.body;
+
+    if (!facilityId || !drugName) {
+      return res.status(400).json({ success: false, message: 'Please provide facilityId and drugName' });
+    }
+
+    const inventory = await Inventory.findOne({ facilityId, drugName: new RegExp(`^${drugName}$`, 'i') });
+
+    // Create a high-priority alert for redistribution
+    const alert = await Alert.create({
+      facilityId,
+      inventoryId: inventory ? inventory._id : null,
+      type: 'low_stock',
+      severity: 'critical',
+      title: `URGENT STOCK REQUEST: ${drugName}`,
+      description: `Doctor ${req.user.name} has requested an urgent supply of ${drugName}. Reason: ${reason || 'Not specified'}. Quantity needed: ${quantity || 'N/A'}.`,
+      metadata: {
+        doctorId: req.user.id,
+        drugName,
+        requestedQuantity: quantity,
+        currentStock: inventory ? inventory.currentStock : 'Unknown'
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      data: alert,
+      message: 'Urgent supply request recorded and notified to management'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+module.exports = { findSurplusAndShortage, generateTransferPlan, requestUrgentSupply }
+

@@ -1,5 +1,39 @@
 const Facility = require('../models/Facility');
 
+const createFacility = async (req, res) => {
+  try {
+    const { name, code, facilityType, location, address, level, contactInfo } = req.body;
+
+    // Explicit validation for required fields
+    if (!name || !code || !facilityType || !location || !location.coordinates) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields: name, code, facilityType, and location (with coordinates)'
+      });
+    }
+
+    const facility = await Facility.create({
+      name,
+      code,
+      facilityType,
+      location,
+      address,
+      level,
+      contactInfo
+    });
+
+    res.status(201).json({
+      success: true,
+      data: facility
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 const getAllFacilities = async (req, res) => {
   try {
     const facilities = await Facility.find({ status: 'active' });
@@ -19,4 +53,4 @@ const getFacilityById = async (req, res) => {
   }
 };
 
-module.exports = {getAllFacilities, getFacilityById}
+module.exports = { getAllFacilities, getFacilityById, createFacility }
