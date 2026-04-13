@@ -4,53 +4,55 @@ const Alert = require('../models/Alert');
 
 class PredictionService {
 
+  /**
+   * Calculate Stock and Expiry Risk for a single item
+   */
   static calculateRisk(inventoryItem) {
-    const { consumptionHistory, currentStock, leadTimeDays, reorderPoint } = inventoryItem;
+    const { consumptionHistory, currentStock, expiryDate } = inventoryItem;
 
+    // --- 1. STOCKOUT PREDICTION ---
     const recentConsumption = this.getRecentConsumption(consumptionHistory, 7);
     const avgDailyUse = recentConsumption.length > 0
       ? recentConsumption.reduce((sum, c) => sum + c.quantity, 0) / recentConsumption.length
       : this.getHistoricalAverage(consumptionHistory);
 
-    if (avgDailyUse === 0) {
-      return { risk: 'unknown', daysLeft: 999, confidence: 'low' };
+    let stockRisk = 'none';
+    let daysLeft = 999;
+    let stockoutDate = null;
+
+    if (avgDailyUse > 0) {
+      daysLeft = Math.floor(currentStock / avgDailyUse);
+      stockoutDate = new Date(Date.now() + (daysLeft * 24 * 60 * 60 * 1000));
+
+      if (daysLeft <= 2) stockRisk = 'critical';
+      else if (daysLeft <= 5) stockRisk = 'high';
+      else if (daysLeft <= 14) stockRisk = 'medium';
+      else if (daysLeft <= 30) stockRisk = 'low';
     }
 
-    const daysLeft = Math.floor(currentStock / avgDailyUse);
-    const stockoutDate = new Date(Date.now() + (daysLeft * 24 * 60 * 60 * 1000));
-
-    let risk = 'none';
-    let priority = 0;
-
-    if (daysLeft <= leadTimeDays) {
-      risk = 'critical';
-      priority = 3;
-    } else if (daysLeft <= leadTimeDays * 2) {
-      risk = 'high';
-      priority = 2;
-    } else if (daysLeft <= leadTimeDays * 3) {
-      risk = 'medium';
-      priority = 1;
-    } else if (daysLeft <= 30) {
-      risk = 'low';
-      priority = 0;
-    }
-
-    // Adjust for reorder point
-    if (currentStock <= reorderPoint && risk === 'none') {
-      risk = 'low';
-      priority = 0;
-    }
+    // --- 2. EXPIRY MONITORING ---
+    const expiryStatus = this.checkExpiryStatus(expiryDate);
 
     return {
-      risk,
-      priority,
+      stockRisk,
       daysLeft,
       predictedStockoutDate: stockoutDate,
       avgDailyUse,
-      recommendedOrder: this.calculateRecommendedOrder(avgDailyUse, leadTimeDays, currentStock),
+      expiryStatus,
       confidence: consumptionHistory.length >= 14 ? 'high' : 'medium'
     };
+  }
+
+  static checkExpiryStatus(expiryDate) {
+    if (!expiryDate) return 'safe';
+    
+    const today = new Date();
+    const diffDays = Math.ceil((new Date(expiryDate) - today) / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) return 'expired';
+    if (diffDays <= 7) return 'expires_soon';
+    if (diffDays <= 30) return 'warning';
+    return 'safe';
   }
 
   static getRecentConsumption(history, days) {
@@ -61,49 +63,13 @@ class PredictionService {
   static getHistoricalAverage(history) {
     if (!history || history.length === 0) return 0;
     const total = history.reduce((sum, h) => sum + h.quantity, 0);
-    const daysSpan = (new Date() - history[0].date) / (1000 * 60 * 60 * 24);
+    const firstEntryDate = history[0].date;
+    const daysSpan = Math.ceil((new Date() - new Date(firstEntryDate)) / (1000 * 60 * 60 * 24));
     return daysSpan > 0 ? total / daysSpan : 0;
   }
 
   /**
-   * Calculate recommended order quantity
-   */
-  static calculateRecommendedOrder(avgDailyUse, leadTimeDays, currentStock) {
-    const safetyStock = avgDailyUse * 3; // 3 days safety stock
-    const orderUpTo = (avgDailyUse * leadTimeDays * 2) + safetyStock;
-    const recommended = Math.max(0, Math.ceil(orderUpTo - currentStock));
-    return recommended;
-  }
-
-  /**
-   * Get all facilities with critical stockouts
-   */
-  static async getCriticalStockouts(limit = 50) {
-    const criticalItems = await Inventory.find({
-      stockoutRisk: 'critical',
-      daysOfStockLeft: { $lt: 7 }
-    })
-      .populate('facilityId', 'name code location address contactInfo')
-      .sort({ daysOfStockLeft: 1 })
-      .limit(limit);
-
-    return criticalItems.map(item => ({
-      facility: item.facilityId,
-      drug: item.drugName,
-      daysLeft: item.daysOfStockLeft,
-      currentStock: item.currentStock,
-      predictedDate: item.predictedStockoutDate,
-      recommendedOrder: this.calculateRecommendedOrder(
-        this.getHistoricalAverage(item.consumptionHistory),
-        item.leadTimeDays,
-        item.currentStock
-      )
-    }));
-  }
-
-  /**
-   * Bulk update predictions for all inventory items
-   * (Run as scheduled job every hour)
+   * Update all predictions in background
    */
   static async updateAllPredictions() {
     const allInventory = await Inventory.find();
@@ -117,16 +83,18 @@ class PredictionService {
           filter: { _id: item._id },
           update: {
             $set: {
-              stockoutRisk: prediction.risk,
+              stockoutRisk: prediction.stockRisk,
               daysOfStockLeft: prediction.daysLeft,
-              predictedStockoutDate: prediction.predictedStockoutDate
+              predictedStockoutDate: prediction.predictedStockoutDate,
+              expiryStatus: prediction.expiryStatus,
+              lastUpdated: new Date()
             }
           }
         }
       });
 
-      // Generate alert if critical
-      if (prediction.risk === 'critical') {
+      // Generate alerts for critical risks
+      if (prediction.stockRisk === 'critical' || prediction.expiryStatus === 'expires_soon' || prediction.expiryStatus === 'expired') {
         await this.createAlert(item, prediction);
       }
     }
@@ -138,13 +106,29 @@ class PredictionService {
     return { updated: updates.length };
   }
 
-  /**
-   * Create alert for critical stockout
-   */
   static async createAlert(inventoryItem, prediction) {
+    let alertType, title, description, severity = 'critical';
+
+    if (prediction.stockRisk === 'critical') {
+      alertType = 'stockout_risk';
+      title = `Critical Stockout Risk: ${inventoryItem.drugName}`;
+      description = `Only ${prediction.daysLeft} days of stock remaining. Urgent action needed.`;
+    } else if (prediction.expiryStatus === 'expired') {
+      alertType = 'expiry';
+      title = `DRUG EXPIRED: ${inventoryItem.drugName}`;
+      description = `Batch ${inventoryItem.batchNumber || 'N/A'} has expired. Remove from stock immediately.`;
+    } else if (prediction.expiryStatus === 'expires_soon') {
+      alertType = 'expiry';
+      severity = 'high';
+      title = `Expiring Soon: ${inventoryItem.drugName}`;
+      description = `Drug will expire on ${new Date(inventoryItem.expiryDate).toLocaleDateString()}.`;
+    }
+
+    if (!alertType) return;
+
     const existingAlert = await Alert.findOne({
       inventoryId: inventoryItem._id,
-      type: 'stockout_risk',
+      type: alertType,
       resolved: false
     });
 
@@ -152,33 +136,35 @@ class PredictionService {
       await Alert.create({
         facilityId: inventoryItem.facilityId,
         inventoryId: inventoryItem._id,
-        type: 'stockout_risk',
-        severity: 'critical',
-        title: `Critical Stockout Risk: ${inventoryItem.drugName}`,
-        description: `Only ${prediction.daysLeft} days of stock remaining. Predicted stockout on ${prediction.predictedStockoutDate.toLocaleDateString()}. Recommended order: ${prediction.recommendedOrder} units.`,
+        type: alertType,
+        severity,
+        title,
+        description,
         metadata: {
           daysLeft: prediction.daysLeft,
-          currentStock: inventoryItem.currentStock,
-          recommendedOrder: prediction.recommendedOrder,
-          avgDailyUse: prediction.avgDailyUse
+          expiryDate: inventoryItem.expiryDate,
+          batchNumber: inventoryItem.batchNumber
         }
       });
     }
   }
 
-  /**
-   * Get dashboard summary statistics
-   */
   static async getDashboardSummary() {
-    const [totalFacilities, criticalCount, highCount, mediumCount, totalDrugs] = await Promise.all([
+    const [
+      totalFacilities,
+      criticalStockouts,
+      expiringSoon,
+      totalDrugs
+    ] = await Promise.all([
       Facility.countDocuments({ status: 'active' }),
       Inventory.countDocuments({ stockoutRisk: 'critical' }),
-      Inventory.countDocuments({ stockoutRisk: 'high' }),
-      Inventory.countDocuments({ stockoutRisk: 'medium' }),
+      Inventory.countDocuments({ expiryStatus: { $in: ['warning', 'expires_soon', 'expired'] } }),
       Inventory.countDocuments()
     ]);
 
-    const topCritical = await Inventory.find({ stockoutRisk: 'critical' })
+    const topCritical = await Inventory.find({ 
+      $or: [{ stockoutRisk: 'critical' }, { expiryStatus: 'expires_soon' }] 
+    })
       .populate('facilityId', 'name code')
       .sort({ daysOfStockLeft: 1 })
       .limit(10);
@@ -187,16 +173,16 @@ class PredictionService {
       summary: {
         totalFacilities,
         totalDrugsMonitored: totalDrugs,
-        criticalStockouts: criticalCount,
-        highRiskStockouts: highCount,
-        mediumRiskStockouts: mediumCount,
-        alertRate: ((criticalCount + highCount) / totalDrugs * 100).toFixed(1)
+        criticalStockouts,
+        expiryRisks: expiringSoon,
+        alertRate: ((criticalStockouts + expiringSoon) / totalDrugs * 100).toFixed(1)
       },
       topAlerts: topCritical.map(item => ({
         facility: item.facilityId ? item.facilityId.name : 'Unknown',
         drug: item.drugName,
         daysLeft: item.daysOfStockLeft,
-        risk: item.stockoutRisk
+        risk: item.stockoutRisk,
+        expiry: item.expiryStatus
       }))
     };
   }

@@ -72,10 +72,23 @@ const inventorySchema = new mongoose.Schema({
     type: Number,
     default: 50
   },
+  expiryDate: {
+    type: Date,
+    index: true
+  },
+  batchNumber: {
+    type: String,
+    trim: true
+  },
   stockoutRisk: {
     type: String,
     enum: ['critical', 'high', 'medium', 'low', 'none'],
     default: 'none'
+  },
+  expiryStatus: {
+    type: String,
+    enum: ['safe', 'warning', 'expires_soon'],
+    default: 'safe'
   },
   predictedStockoutDate: Date,
   daysOfStockLeft: Number,

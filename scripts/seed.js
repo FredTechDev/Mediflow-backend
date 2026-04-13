@@ -6,143 +6,160 @@ const Inventory = require('../models/Inventory');
 const Patient = require('../models/Patient');
 const Prescription = require('../models/Prescription');
 const PrescriptionItem = require('../models/PrescriptionItem');
+const DispensingLog = require('../models/DispensingLog');
+const StockMovement = require('../models/StockMovement');
 const ROLES = require('../utils/userRoles');
 
 dotenv.config();
 
-const seedDemoData = async () => {
+// DETERMINISTIC IDs FOR DEMO STABILITY
+const IDs = {
+  FACILITY_KAKAMEGA: '65f000000000000000000001',
+  FACILITY_MUMIAS: '65f000000000000000000002',
+  
+  USER_ADMIN: '65f000000000000000000010',
+  USER_GOVT: '65f000000000000000000011',
+  USER_SUPPLY: '65f000000000000000000012',
+  USER_MANAGER: '65f000000000000000000013',
+  USER_DOCTOR: '65f000000000000000000014',
+  USER_PHARMAN: '65f000000000000000000015',
+
+  PATIENT_JOHN: '65f000000000000000000020',
+  PATIENT_MARY: '65f000000000000000000021',
+
+  INV_AMOX_KAK: '65f000000000000000000030',
+  INV_AMOX_MUM: '65f000000000000000000031',
+  INV_ART_KAK: '65f000000000000000000032',
+  INV_ART_MUM: '65f000000000000000000033'
+};
+
+const seedFullSystem = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('🚀 Connected to MongoDB for seeding...');
+    console.log('🚀 Connected to MongoDB for Full System Seed...');
 
-    // 1. CLEAR EXISTING DATA (Relevant to demo)
-    await Facility.deleteMany({ code: 'KH-001' });
-    await User.deleteMany({ email: { $in: ['doctor.achieng@mediflow.com', 'ph.otieno@mediflow.com'] } });
-    await Patient.deleteMany({ patientIdentifier: { $in: ['P-998', 'P-999'] } });
-    // Note: Inventory and Prescriptions are cleared below after facility creation
-    console.log('🧹 Cleaned up old demo data.');
+    // 1. CLEANUP
+    await Promise.all([
+      Facility.deleteMany({}),
+      User.deleteMany({}),
+      Inventory.deleteMany({}),
+      Patient.deleteMany({}),
+      Prescription.deleteMany({}),
+      PrescriptionItem.deleteMany({}),
+      DispensingLog.deleteMany({}),
+      StockMovement.deleteMany({})
+    ]);
+    console.log('🧹 Database Purged.');
 
-    // 2. CREATE FACILITY
-    const facility = await Facility.create({
-      name: 'Kakamega County Hospital',
-      code: 'KH-001',
-      location: { type: 'Point', coordinates: [34.7519, 0.2827] }, // Kakamega coordinates
-      facilityType: 'hospital',
-      address: { region: 'Western', district: 'Kakamega', ward: 'Township' }
-    });
-    console.log(`📍 Facility Created: ${facility.name}`);
+    // 2. FACILITIES (Geospatially close: Kakamega & Mumias ~30km)
+    await Facility.insertMany([
+      {
+        _id: IDs.FACILITY_KAKAMEGA,
+        name: 'Kakamega County Referral Hospital',
+        code: 'KH-001',
+        location: { type: 'Point', coordinates: [34.7519, 0.2827] },
+        facilityType: 'hospital',
+        address: { region: 'Western', district: 'Kakamega', ward: 'Township' }
+      },
+      {
+        _id: IDs.FACILITY_MUMIAS,
+        name: 'Mumias Level 4 Hospital',
+        code: 'MH-002',
+        location: { type: 'Point', coordinates: [34.4889, 0.3347] },
+        facilityType: 'hospital',
+        address: { region: 'Western', district: 'Mumias', ward: 'Central' }
+      }
+    ]);
+    console.log('📍 Facilities Created (Kakamega & Mumias)');
 
-    // Clear and Link Data to this specific facility
-    await Inventory.deleteMany({ facilityId: facility._id });
-    await Prescription.deleteMany({ facilityId: facility._id });
-    await PrescriptionItem.deleteMany({}); // General clear for items
+    // 3. USERS (Full RBAC Coverage)
+    await User.insertMany([
+      { _id: IDs.USER_ADMIN, name: 'Root Admin', email: 'admin@mediflow.com', password: 'password123', role: ROLES.ADMIN },
+      { _id: IDs.USER_GOVT, name: 'MoH Officer', email: 'govt@mediflow.com', password: 'password123', role: ROLES.GOVERNMENT },
+      { _id: IDs.USER_SUPPLY, name: 'Supply Chain Lead', email: 'supply@mediflow.com', password: 'password123', role: ROLES.SUPPLY_OFFICER },
+      { _id: IDs.USER_MANAGER, name: 'Facility Manager', email: 'manager@mediflow.com', password: 'password123', role: ROLES.MANAGER, facilityId: IDs.FACILITY_KAKAMEGA },
+      { _id: IDs.USER_DOCTOR, name: 'Dr. Achieng', email: 'doctor@mediflow.com', password: 'password123', role: ROLES.DOCTOR, facilityId: IDs.FACILITY_KAKAMEGA },
+      { _id: IDs.USER_PHARMAN, name: 'Ph. Otieno', email: 'pharmacist@mediflow.com', password: 'password123', role: ROLES.PHARMACIST, facilityId: IDs.FACILITY_KAKAMEGA }
+    ]);
+    console.log('👥 Users Created (All 6 Roles)');
 
-    // 3. CREATE USERS
-    const doctor = await User.create({
-      name: 'Dr. Achieng',
-      email: 'doctor.achieng@mediflow.com',
-      password: 'demo1234', // Will be hashed by model pre-save hook
-      role: ROLES.DOCTOR,
-      facilityId: facility._id
-    });
+    // 4. PATIENTS
+    await Patient.insertMany([
+      { _id: IDs.PATIENT_JOHN, name: 'John Mwangi', patientIdentifier: 'P-001', age: 45, gender: 'male', registeredBy: IDs.USER_DOCTOR, facilityId: IDs.FACILITY_KAKAMEGA },
+      { _id: IDs.PATIENT_MARY, name: 'Mary Akinyi', patientIdentifier: 'P-002', age: 28, gender: 'female', registeredBy: IDs.USER_DOCTOR, facilityId: IDs.FACILITY_KAKAMEGA }
+    ]);
+    console.log('🩹 Patients Created');
 
-    const pharmacist = await User.create({
-      name: 'Pharmacist Otieno',
-      email: 'ph.otieno@mediflow.com',
-      password: 'demo1234',
-      role: ROLES.PHARMACIST,
-      facilityId: facility._id
-    });
-    console.log('👥 Users Created: Dr. Achieng & Ph. Otieno');
-
-    // 4. CREATE PATIENTS
-    const patient1 = await Patient.create({
-      name: 'John Mwangi',
-      patientIdentifier: 'P-998',
-      age: 42,
-      gender: 'male',
-      registeredBy: doctor._id,
-      facilityId: facility._id
-    });
-
-    const patient2 = await Patient.create({
-      name: 'Mary Akinyi',
-      patientIdentifier: 'P-999',
-      age: 29,
-      gender: 'female',
-      registeredBy: doctor._id,
-      facilityId: facility._id
-    });
-    console.log('🩹 Patients Registered: John Mwangi & Mary Akinyi');
-
-    // 5. CREATE INVENTORY (Story-driven levels)
-    const drugs = [
-      { drugName: 'Amoxicillin', currentStock: 120, risk: 'none', category: 'antibiotics' },
-      { drugName: 'Paracetamol', currentStock: 200, risk: 'none', category: 'painkiller' },
-      { drugName: 'Artemether (Antimalarial)', currentStock: 30, risk: 'low', category: 'antimalarial' }, // Low (Malaria story)
-      { drugName: 'Insulin', currentStock: 5, risk: 'critical', category: 'other' }, // Critical
-      { drugName: 'Salbutamol', currentStock: 50, risk: 'medium', category: 'other' }
-    ];
-
-    const inventoryItems = await Inventory.insertMany(
-      drugs.map(d => ({
-        ...d,
-        facilityId: facility._id,
+    // 5. INVENTORY (The "Match" Scenario & Expiry Demo)
+    const today = new Date();
+    await Inventory.insertMany([
+      // ARTEMETHER: KH (Shortage) vs MH (Surplus)
+      {
+        _id: IDs.INV_ART_KAK,
+        facilityId: IDs.FACILITY_KAKAMEGA,
+        drugName: 'Artemether (Antimalarial)',
+        currentStock: 10, // CRITICAL
+        category: 'antimalarial',
+        stockoutRisk: 'critical',
         reorderPoint: 50,
-        stockoutRisk: d.risk
-      }))
-    );
-    console.log('💊 Inventory Seeded with realistic stock levels.');
+        expiryDate: new Date(today.getTime() + 180 * 24 * 60 * 60 * 1000)
+      },
+      {
+        _id: IDs.INV_ART_MUM,
+        facilityId: IDs.FACILITY_MUMIAS,
+        drugName: 'Artemether (Antimalarial)',
+        currentStock: 500, // SURPLUS
+        category: 'antimalarial',
+        stockoutRisk: 'none',
+        reorderPoint: 50,
+        expiryDate: new Date(today.getTime() + 180 * 24 * 60 * 60 * 1000)
+      },
+      // AMOXICILLIN: Balanced but expiring soon in KAK
+      {
+        _id: IDs.INV_AMOX_KAK,
+        facilityId: IDs.FACILITY_KAKAMEGA,
+        drugName: 'Amoxicillin',
+        currentStock: 100,
+        category: 'antibiotics',
+        expiryDate: new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000), // EXPIRES SOON
+        expiryStatus: 'expires_soon'
+      },
+      {
+        _id: IDs.INV_AMOX_MUM,
+        facilityId: IDs.FACILITY_MUMIAS,
+        drugName: 'Amoxicillin',
+        currentStock: 100,
+        category: 'antibiotics',
+        expiryDate: new Date(today.getTime() + 200 * 24 * 60 * 60 * 1000)
+      }
+    ]);
+    console.log('💊 Inventory Setup (Shortage/Surplus & Expiry scenarios ready)');
 
-    // 6. CREATE SAMPLE PRESCRIPTIONS
-    // Prescription 1: Malaria Case (John Mwangi)
+    // 6. PRESCRIPTIONS
     const p1 = await Prescription.create({
-      doctorId: doctor._id,
-      facilityId: facility._id,
-      patientId: patient1._id,
-      status: 'pending',
-      priority: 'normal',
-      patientNotes: 'Presents with high fever and chills. Malaria suspected.'
+      doctorId: IDs.USER_DOCTOR, facilityId: IDs.FACILITY_KAKAMEGA, patientId: IDs.PATIENT_JOHN,
+      status: 'pending', priority: 'normal'
+    });
+    await PrescriptionItem.create({
+      prescriptionId: p1._id, inventoryId: IDs.INV_ART_KAK, drugName: 'Artemether (Antimalarial)', quantity: 6
     });
 
-    // Link items
-    const artemether = inventoryItems.find(i => i.drugName.includes('Artemether'));
-    const paracetamol = inventoryItems.find(i => i.drugName === 'Paracetamol');
+    console.log('🧾 Sample Pending Prescription Created (to be dispensed)');
 
-    await PrescriptionItem.insertMany([
-      { prescriptionId: p1._id, inventoryId: artemether._id, drugName: artemether.drugName, quantity: 6 },
-      { prescriptionId: p1._id, inventoryId: paracetamol._id, drugName: paracetamol.drugName, quantity: 10 }
-    ]);
-
-    // Prescription 2: Infection Case (Mary Akinyi)
-    const p2 = await Prescription.create({
-      doctorId: doctor._id,
-      facilityId: facility._id,
-      patientId: patient2._id,
-      status: 'pending',
-      priority: 'urgent',
-      patientNotes: 'Severe cough and chest pain. Antibiotics required.'
-    });
-
-    const amoxicillin = inventoryItems.find(i => i.drugName === 'Amoxicillin');
-    await PrescriptionItem.insertMany([
-      { prescriptionId: p2._id, inventoryId: amoxicillin._id, drugName: amoxicillin.drugName, quantity: 10 }
-    ]);
-
-    console.log('🧾 Prescriptions Created (John: Malaria, Mary: Infection)');
-
-    console.log('\n✨ DEMO DATA SEEDING COMPLETE! ✨');
+    console.log('\n✨ FULL SYSTEM SEED COMPLETE! ✨');
     console.log('-----------------------------------');
-    console.log(`Facility ID: ${facility._id}`);
-    console.log(`Doctor Login: doctor.achieng@mediflow.com / demo1234`);
-    console.log(`Pharmacist Login: ph.otieno@mediflow.com / demo1234`);
+    console.log(`Kakamega Facility: ${IDs.FACILITY_KAKAMEGA}`);
+    console.log(`Mumias Facility:   ${IDs.FACILITY_MUMIAS}`);
+    console.log(`Admin Login:       admin@mediflow.com / password123`);
+    console.log(`Doctor Login:      doctor@mediflow.com / password123`);
+    console.log(`Pharmacist Login:  pharmacist@mediflow.com / password123`);
     console.log('-----------------------------------');
 
     process.exit(0);
   } catch (err) {
-    console.error('❌ Seeding failed:', err);
+    console.error('❌ Seed failed:', err);
     process.exit(1);
   }
 };
 
-seedDemoData();
+seedFullSystem();

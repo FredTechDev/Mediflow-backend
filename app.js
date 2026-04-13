@@ -12,8 +12,23 @@ const prescriptionRoutes = require('./routes/prescription');
 const patientRoutes = require('./routes/patient');
 const { errorHandler } = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
+const cron = require('node-cron');
+const PredictionService = require('./services/predictionService');
 
 const app = express();
+
+// --- Background Jobs ---
+// Run prediction engine every hour
+cron.schedule('0 * * * *', async () => {
+  try {
+    console.log('⏳ Running scheduled prediction update...');
+    const result = await PredictionService.updateAllPredictions();
+    console.log(`✅ Scheduled update complete. Updated ${result.updated} items.`);
+  } catch (error) {
+    console.error('❌ Error in scheduled prediction update:', error);
+  }
+});
+
 
 // Security middleware
 app.use(helmet());

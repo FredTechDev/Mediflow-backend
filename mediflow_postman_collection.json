@@ -1,0 +1,374 @@
+{
+	"info": {
+		"_postman_id": "mediflow-api-collection",
+		"name": "Mediflow API Full System",
+		"description": "Comprehensive API collection mapped to the deterministic seed data for full system testing.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login (Doctor)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"doctor@mediflow.com\",\n    \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login (Pharmacist)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"pharmacist@mediflow.com\",\n    \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login (Admin)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@mediflow.com\",\n    \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Register New Staff (Admin)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Nurse Joy\",\n    \"email\": \"joy@mediflow.com\",\n    \"password\": \"password123\",\n    \"role\": \"pharmacist\",\n    \"facilityId\": \"{{facility_kakamega}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Clinical (Doctor Flow)",
+			"item": [
+				{
+					"name": "Register Patient",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Alice Wambui\",\n    \"patientIdentifier\": \"P-1001\",\n    \"age\": 25,\n    \"gender\": \"female\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/patients",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"patients"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Drug Availability (Nearby)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/inventory/search?drugName=Artemether",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"inventory",
+								"search"
+							],
+							"query": [
+								{
+									"key": "drugName",
+									"value": "Artemether"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Prescription",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"patientId\": \"{{patient_john}}\",\n    \"drugs\": [\n        { \"inventoryId\": \"{{inventory_art_kak}}\", \"quantity\": 5 }\n    ],\n    \"priority\": \"normal\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/prescriptions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"prescriptions"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Pharmacy (Pharmacist Flow)",
+			"item": [
+				{
+					"name": "Get Pending Prescriptions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/prescriptions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"prescriptions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Dispense (Transactional)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"prescriptionId\": \"enter_p1_id_here\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/prescriptions/dispense",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"prescriptions",
+								"dispense"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Supply Chain (Analytics)",
+			"item": [
+				{
+					"name": "National Risk Summary",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/predictions/summary",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"predictions",
+								"summary"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Match Redistribution",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/redistribution/match",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"redistribution",
+								"match"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000/api",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "your_token_here",
+			"type": "string"
+		},
+		{
+			"key": "facility_kakamega",
+			"value": "65f000000000000000000001",
+			"type": "string"
+		},
+		{
+			"key": "facility_mumias",
+			"value": "65f000000000000000000002",
+			"type": "string"
+		},
+		{
+			"key": "inventory_art_kak",
+			"value": "65f000000000000000000032",
+			"type": "string"
+		},
+		{
+			"key": "patient_john",
+			"value": "65f000000000000000000020",
+			"type": "string"
+		}
+	]
+}
