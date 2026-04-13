@@ -19,21 +19,6 @@ const prescriptionSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  inventoryId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Inventory',
-    required: true,
-    index: true
-  },
-  drugName: {
-    type: String,
-    required: true
-  },
-  quantity: {
-    type: Number,
-    required: true,
-    min: 1
-  },
   priority: {
     type: String,
     enum: ['normal', 'urgent'],

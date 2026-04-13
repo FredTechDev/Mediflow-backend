@@ -94,4 +94,8 @@ const searchDrugAvailability = async (req, res) => {
   }
 };
 
-module.exports = { getFacilityInventory, updateStock, searchDrugAvailability }
+module.exports = { 
+  getFacilityInventory, 
+  updateStock, 
+  searchDrugAvailability 
+}

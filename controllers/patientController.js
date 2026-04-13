@@ -3,7 +3,7 @@ const Patient = require('../models/Patient');
 // @desc    Register a new patient
 // @route   POST /api/patients
 // @access  Private (Doctor, Admin)
-exports.registerPatient = async (req, res) => {
+const registerPatient = async (req, res) => {
   try {
     const { name, patientIdentifier, age, gender, contactInfo, address } = req.body;
 
@@ -36,7 +36,7 @@ exports.registerPatient = async (req, res) => {
 // @desc    Get all patients at the current facility
 // @route   GET /api/patients
 // @access  Private (Doctor, Admin, Pharmacist)
-exports.getPatients = async (req, res) => {
+const getPatients = async (req, res) => {
   try {
     const patients = await Patient.find({ facilityId: req.user.facilityId })
       .sort({ createdAt: -1 });
@@ -50,7 +50,7 @@ exports.getPatients = async (req, res) => {
 // @desc    Get single patient by ID with prescription history
 // @route   GET /api/patients/:id
 // @access  Private (Doctor, Admin, Pharmacist)
-exports.getPatientById = async (req, res) => {
+const getPatientById = async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id).populate('prescriptions');
 
@@ -63,3 +63,9 @@ exports.getPatientById = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+module.exports =  {
+  registerPatient, 
+  getPatients, 
+  getPatientById
+}
