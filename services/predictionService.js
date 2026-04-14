@@ -8,7 +8,7 @@ class PredictionService {
    * Calculate Stock and Expiry Risk for a single item
    */
   static calculateRisk(inventoryItem) {
-    const { consumptionHistory, currentStock, expiryDate } = inventoryItem;
+    const { consumptionHistory, currentStock, expiryDate, reorderPoint, maxStock } = inventoryItem;
 
     // --- 1. STOCKOUT PREDICTION ---
     const recentConsumption = this.getRecentConsumption(consumptionHistory, 7);
@@ -19,6 +19,8 @@ class PredictionService {
     let stockRisk = 'none';
     let daysLeft = 999;
     let stockoutDate = null;
+    let reorderDate = null;
+    let reorderAmount = 0;
 
     if (avgDailyUse > 0) {
       daysLeft = Math.floor(currentStock / avgDailyUse);
@@ -28,6 +30,19 @@ class PredictionService {
       else if (daysLeft <= 5) stockRisk = 'high';
       else if (daysLeft <= 14) stockRisk = 'medium';
       else if (daysLeft <= 30) stockRisk = 'low';
+
+      // Reorder Date Calculation
+      const effectiveReorderPoint = reorderPoint || 100;
+      if (currentStock > effectiveReorderPoint) {
+        const daysUntilReorder = Math.floor((currentStock - effectiveReorderPoint) / avgDailyUse);
+        reorderDate = new Date(Date.now() + (daysUntilReorder * 24 * 60 * 60 * 1000));
+      } else {
+        reorderDate = new Date(); // Needs reorder now
+      }
+
+      // Reorder Amount Calculation (Replenish to maxStock)
+      const effectiveMaxStock = maxStock || 1000;
+      reorderAmount = Math.max(0, effectiveMaxStock - currentStock);
     }
 
     // --- 2. EXPIRY MONITORING ---
@@ -39,6 +54,8 @@ class PredictionService {
       predictedStockoutDate: stockoutDate,
       avgDailyUse,
       expiryStatus,
+      reorderDate,
+      reorderAmount,
       confidence: consumptionHistory.length >= 14 ? 'high' : 'medium'
     };
   }
@@ -93,8 +110,11 @@ class PredictionService {
         }
       });
 
-      // Generate alerts for critical risks
-      if (prediction.stockRisk === 'critical' || prediction.expiryStatus === 'expires_soon' || prediction.expiryStatus === 'expired') {
+      // Generate alerts for critical risks or reorder thresholds
+      if (prediction.stockRisk === 'critical' || 
+          prediction.stockRisk === 'high' || 
+          prediction.expiryStatus === 'expires_soon' || 
+          prediction.expiryStatus === 'expired') {
         await this.createAlert(item, prediction);
       }
     }
@@ -109,10 +129,14 @@ class PredictionService {
   static async createAlert(inventoryItem, prediction) {
     let alertType, title, description, severity = 'critical';
 
-    if (prediction.stockRisk === 'critical') {
+    if (prediction.stockRisk === 'critical' || prediction.stockRisk === 'high') {
       alertType = 'stockout_risk';
-      title = `Critical Stockout Risk: ${inventoryItem.drugName}`;
-      description = `Only ${prediction.daysLeft} days of stock remaining. Urgent action needed.`;
+      severity = prediction.stockRisk === 'critical' ? 'critical' : 'high';
+      title = `${prediction.stockRisk.toUpperCase()} Stockout Risk: ${inventoryItem.drugName}`;
+      
+      const formattedDate = prediction.reorderDate ? new Date(prediction.reorderDate).toLocaleDateString() : 'ASAP';
+      description = `Current Stock: ${inventoryItem.currentStock}. Expected Stockout in ${prediction.daysLeft} days. ` +
+                    `Action: Reorder ${prediction.reorderAmount} units by ${formattedDate}.`;
     } else if (prediction.expiryStatus === 'expired') {
       alertType = 'expiry';
       title = `DRUG EXPIRED: ${inventoryItem.drugName}`;
@@ -143,7 +167,9 @@ class PredictionService {
         metadata: {
           daysLeft: prediction.daysLeft,
           expiryDate: inventoryItem.expiryDate,
-          batchNumber: inventoryItem.batchNumber
+          batchNumber: inventoryItem.batchNumber,
+          reorderAmount: prediction.reorderAmount,
+          reorderDate: prediction.reorderDate
         }
       });
     }

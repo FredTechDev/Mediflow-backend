@@ -35,7 +35,7 @@ const verifyDoctor = async () => {
       role: ROLES.DOCTOR,
       facilityId: facility._id
     });
-    console.log('✅ Doctor created');
+    console.log('Doctor created');
 
     // 3. Create Inventory
     const inventory = await Inventory.create({
@@ -45,7 +45,7 @@ const verifyDoctor = async () => {
       stockoutRisk: 'critical',
       reorderPoint: 20
     });
-    console.log('✅ Inventory created (Critical Stock)');
+    console.log('Inventory created (Critical Stock)');
 
     // 4. Test Prescription Creation & Alert Generation
     const prescription = await Prescription.create({

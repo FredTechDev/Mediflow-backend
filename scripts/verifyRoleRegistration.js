@@ -24,18 +24,14 @@ const verifyRegistration = async () => {
       password: 'password123',
       role: ROLES.ADMIN
     });
-    console.log('✅ Bootstrap Admin created successfully');
+    console.log('Bootstrap Admin created successfully');
 
     // 2. Mock a login for the Admin (to get a token)
     const adminToken = jwt.sign({ id: adminUser._id }, process.env.JWT_SECRET, {
       expiresIn: '1d'
     });
 
-    // 3. Test Unauthorized registration (No token, but DB NOT empty)
-    // We'll simulate this by manually checking the logic we put in the controller or using a mock req/res
-    // Since this is a script, we'll verify the data rules.
-    
-    // Create a facility for testing
+   
     const facility = await Facility.create({
       name: 'Main Clinic',
       code: 'MC001',
@@ -56,9 +52,8 @@ const verifyRegistration = async () => {
       expiresIn: '1d'
     });
     
-    console.log('✅ Manager created');
+    console.log('Manager created');
 
-    // Verification of the logic: 
     // In a real API call, we'd use supertest. Here, we'll just check if the model permits the data.
     const pharmacist = await User.create({
       name: 'Local Pharmacist',
@@ -67,13 +62,13 @@ const verifyRegistration = async () => {
       role: ROLES.PHARMACIST,
       facilityId: facility._id
     });
-    console.log('✅ Pharmacist created for the correct facility');
+    console.log('Pharmacist created for the correct facility');
 
     // 5. Test Manager registering a Doctor for WRONG facility (Simulated failure check)
     try {
       const otherFacilityId = new mongoose.Types.ObjectId();
       if (otherFacilityId.toString() !== manager.facilityId.toString()) {
-        console.log('✅ Correctly identified that Manager cannot register for other facility');
+        console.log('Correctly identified that Manager cannot register for other facility');
       }
     } catch (err) {
       console.log('Error during simulation:', err.message);

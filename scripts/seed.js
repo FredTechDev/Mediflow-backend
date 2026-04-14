@@ -8,6 +8,8 @@ const Prescription = require('../models/Prescription');
 const PrescriptionItem = require('../models/PrescriptionItem');
 const DispensingLog = require('../models/DispensingLog');
 const StockMovement = require('../models/StockMovement');
+const Alert = require('../models/Alert');
+const PredictionService = require('../services/predictionService');
 const ROLES = require('../utils/userRoles');
 
 dotenv.config();
@@ -39,6 +41,7 @@ const seedFullSystem = async () => {
     console.log('🚀 Connected to MongoDB for Full System Seed...');
 
     // 1. CLEANUP
+    console.log('🧹 Purging Database...');
     await Promise.all([
       Facility.deleteMany({}),
       User.deleteMany({}),
@@ -47,11 +50,11 @@ const seedFullSystem = async () => {
       Prescription.deleteMany({}),
       PrescriptionItem.deleteMany({}),
       DispensingLog.deleteMany({}),
-      StockMovement.deleteMany({})
+      StockMovement.deleteMany({}),
+      Alert.deleteMany({})
     ]);
-    console.log('🧹 Database Purged.');
 
-    // 2. FACILITIES (Geospatially close: Kakamega & Mumias ~30km)
+    // 2. FACILITIES
     await Facility.insertMany([
       {
         _id: IDs.FACILITY_KAKAMEGA,
@@ -70,18 +73,22 @@ const seedFullSystem = async () => {
         address: { region: 'Western', district: 'Mumias', ward: 'Central' }
       }
     ]);
-    console.log('📍 Facilities Created (Kakamega & Mumias)');
+    console.log('📍 Facilities Created');
 
-    // 3. USERS (Full RBAC Coverage)
-    await User.insertMany([
+    // 3. USERS (Using loop with .create to trigger password hashing middleware)
+    const userData = [
       { _id: IDs.USER_ADMIN, name: 'Root Admin', email: 'admin@mediflow.com', password: 'password123', role: ROLES.ADMIN },
       { _id: IDs.USER_GOVT, name: 'MoH Officer', email: 'govt@mediflow.com', password: 'password123', role: ROLES.GOVERNMENT },
       { _id: IDs.USER_SUPPLY, name: 'Supply Chain Lead', email: 'supply@mediflow.com', password: 'password123', role: ROLES.SUPPLY_OFFICER },
       { _id: IDs.USER_MANAGER, name: 'Facility Manager', email: 'manager@mediflow.com', password: 'password123', role: ROLES.MANAGER, facilityId: IDs.FACILITY_KAKAMEGA },
       { _id: IDs.USER_DOCTOR, name: 'Dr. Achieng', email: 'doctor@mediflow.com', password: 'password123', role: ROLES.DOCTOR, facilityId: IDs.FACILITY_KAKAMEGA },
       { _id: IDs.USER_PHARMAN, name: 'Ph. Otieno', email: 'pharmacist@mediflow.com', password: 'password123', role: ROLES.PHARMACIST, facilityId: IDs.FACILITY_KAKAMEGA }
-    ]);
-    console.log('👥 Users Created (All 6 Roles)');
+    ];
+
+    for (const user of userData) {
+      await User.create(user);
+    }
+    console.log('👥 Users Created (with secure hashing)');
 
     // 4. PATIENTS
     await Patient.insertMany([
@@ -90,38 +97,42 @@ const seedFullSystem = async () => {
     ]);
     console.log('🩹 Patients Created');
 
-    // 5. INVENTORY (The "Match" Scenario & Expiry Demo)
+    // 5. INVENTORY
     const today = new Date();
     await Inventory.insertMany([
-      // ARTEMETHER: KH (Shortage) vs MH (Surplus)
       {
         _id: IDs.INV_ART_KAK,
         facilityId: IDs.FACILITY_KAKAMEGA,
         drugName: 'Artemether (Antimalarial)',
-        currentStock: 10, // CRITICAL
+        currentStock: 15,
         category: 'antimalarial',
-        stockoutRisk: 'critical',
         reorderPoint: 50,
-        expiryDate: new Date(today.getTime() + 180 * 24 * 60 * 60 * 1000)
+        maxStock: 500,
+        expiryDate: new Date(today.getTime() + 180 * 24 * 60 * 60 * 1000),
+        consumptionHistory: [
+            { date: new Date(today - 86400000), quantity: 15 },
+            { date: new Date(today - 172800000), quantity: 15 }
+        ]
       },
       {
         _id: IDs.INV_ART_MUM,
         facilityId: IDs.FACILITY_MUMIAS,
         drugName: 'Artemether (Antimalarial)',
-        currentStock: 500, // SURPLUS
+        currentStock: 600,
         category: 'antimalarial',
-        stockoutRisk: 'none',
         reorderPoint: 50,
+        maxStock: 1000,
         expiryDate: new Date(today.getTime() + 180 * 24 * 60 * 60 * 1000)
       },
-      // AMOXICILLIN: Balanced but expiring soon in KAK
       {
         _id: IDs.INV_AMOX_KAK,
         facilityId: IDs.FACILITY_KAKAMEGA,
         drugName: 'Amoxicillin',
-        currentStock: 100,
+        currentStock: 300,
         category: 'antibiotics',
-        expiryDate: new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000), // EXPIRES SOON
+        reorderPoint: 50,
+        maxStock: 1000,
+        expiryDate: new Date(today.getTime() + 4 * 24 * 60 * 60 * 1000),
         expiryStatus: 'expires_soon'
       },
       {
@@ -130,31 +141,19 @@ const seedFullSystem = async () => {
         drugName: 'Amoxicillin',
         currentStock: 100,
         category: 'antibiotics',
+        reorderPoint: 50,
+        maxStock: 1000,
         expiryDate: new Date(today.getTime() + 200 * 24 * 60 * 60 * 1000)
       }
     ]);
-    console.log('💊 Inventory Setup (Shortage/Surplus & Expiry scenarios ready)');
+    console.log('💊 Inventory Setup');
 
-    // 6. PRESCRIPTIONS
-    const p1 = await Prescription.create({
-      doctorId: IDs.USER_DOCTOR, facilityId: IDs.FACILITY_KAKAMEGA, patientId: IDs.PATIENT_JOHN,
-      status: 'pending', priority: 'normal'
-    });
-    await PrescriptionItem.create({
-      prescriptionId: p1._id, inventoryId: IDs.INV_ART_KAK, drugName: 'Artemether (Antimalarial)', quantity: 6
-    });
-
-    console.log('🧾 Sample Pending Prescription Created (to be dispensed)');
+    // 6. INITIAL PREDICTION RUN
+    console.log('Generating predictive context...');
+    await PredictionService.updateAllPredictions();
+    console.log('Automated Alerts Generated.');
 
     console.log('\n✨ FULL SYSTEM SEED COMPLETE! ✨');
-    console.log('-----------------------------------');
-    console.log(`Kakamega Facility: ${IDs.FACILITY_KAKAMEGA}`);
-    console.log(`Mumias Facility:   ${IDs.FACILITY_MUMIAS}`);
-    console.log(`Admin Login:       admin@mediflow.com / password123`);
-    console.log(`Doctor Login:      doctor@mediflow.com / password123`);
-    console.log(`Pharmacist Login:  pharmacist@mediflow.com / password123`);
-    console.log('-----------------------------------');
-
     process.exit(0);
   } catch (err) {
     console.error('❌ Seed failed:', err);

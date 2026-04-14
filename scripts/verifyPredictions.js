@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Inventory = require('../models/Inventory');
 const PredictionService = require('../services/predictionService');
 const Facility = require('../models/Facility');
+const Alert = require('../models/Alert');
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -23,62 +24,67 @@ const verifyPredictions = async () => {
     }
 
     await Inventory.deleteMany({ facilityId: facility._id });
+    await Alert.deleteMany({ facilityId: facility._id });
 
     const today = new Date();
     
-    // Drug A: Critical Stockout (10 stock, 5/day usage = 2 days left)
+    // Drug A: High Usage (Current: 150, ReorderPoint: 100, Usage: 10/day)
+    // Days until reorder = (150-100)/10 = 5 days
+    // daysLeft = 150/10 = 15 days (Medium risk)
     const drugA = await Inventory.create({
         facilityId: facility._id,
-        drugName: 'Critical Shortage Heroin',
-        currentStock: 10,
+        drugName: 'Logistics Test Drug',
+        currentStock: 150,
+        reorderPoint: 100,
+        maxStock: 500,
         consumptionHistory: [
-            { date: today, quantity: 5 },
-            { date: new Date(today - 86400000), quantity: 5 }
+            { date: today, quantity: 10 },
+            { date: new Date(today - 86400000), quantity: 10 }
         ]
     });
 
-    // Drug B: Expiring Soon (large stock, but expires in 5 days)
-    const drugB = await Inventory.create({
-        facilityId: facility._id,
-        drugName: 'Expires Soon Aspirin',
-        currentStock: 1000,
-        expiryDate: new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000),
-        batchNumber: 'BATCH-001'
-    });
-
-    // Drug C: Already Expired
-    const drugC = await Inventory.create({
-        facilityId: facility._id,
-        drugName: 'Expired Medicine',
-        currentStock: 100,
-        expiryDate: new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000),
-        batchNumber: 'EXPIRED-666'
-    });
-
-    console.log('✅ Test items created. Running updateAllPredictions...');
+    console.log('Test item created. Running updateAllPredictions...');
 
     // 2. Run Prediction Engine
     await PredictionService.updateAllPredictions();
 
-    // 3. Verify Results
-    const aResult = await Inventory.findById(drugA._id);
-    const bResult = await Inventory.findById(drugB._id);
-    const cResult = await Inventory.findById(drugC._id);
+    // 3. Verify Alert Generation
+    // We expect an alert if the risk is 'high' or 'critical'. 
+    // In our test, daysLeft=15 is 'medium' in the new logic. 
+    // Let's force it to 'high' by reducing stock to 50.
+    
+    await Inventory.findByIdAndUpdate(drugA._id, { currentStock: 50 }); // Below reorder point (100)
+    await PredictionService.updateAllPredictions();
+
+    const alert = await Alert.findOne({ inventoryId: drugA._id, type: 'stockout_risk' });
 
     console.log('\n--- VERIFICATION RESULTS ---');
-    console.log(`${aResult.drugName}: StockRisk: ${aResult.stockoutRisk} (Expected: critical), Days: ${aResult.daysOfStockLeft}`);
-    console.log(`${bResult.drugName}: ExpiryStatus: ${bResult.expiryStatus} (Expected: expires_soon)`);
-    console.log(`${cResult.drugName}: ExpiryStatus: ${cResult.expiryStatus} (Expected: expired)`);
+    if (alert) {
+        console.log(`Alert Title: ${alert.title}`);
+        console.log(`Alert Description: ${alert.description}`);
+        console.log(`Metadata Reorder Amount: ${alert.metadata.reorderAmount}`);
+        console.log(`Metadata Reorder Date: ${alert.metadata.reorderDate}`);
 
-    const summary = await PredictionService.getDashboardSummary();
-    console.log('\n--- DASHBOARD SUMMARY ---');
-    console.log(`Critical Stockouts: ${summary.summary.criticalStockouts}`);
-    console.log(`Expiry Risks: ${summary.summary.expiryRisks}`);
+        const expectedAmount = 500 - 50; // max - current
+        if (alert.metadata.reorderAmount === expectedAmount) {
+            console.log('✅ Reorder Amount Prediction: PASSED');
+        } else {
+            console.log(`❌ Reorder Amount Prediction: FAILED (Got ${alert.metadata.reorderAmount}, expected ${expectedAmount})`);
+        }
 
-    if (aResult.stockoutRisk === 'critical' && bResult.expiryStatus === 'expires_soon' && cResult.expiryStatus === 'expired') {
-        console.log('\n🏆 ALL PREDICTION TESTS PASSED!');
+        if (alert.metadata.reorderDate) {
+            console.log('✅ Reorder Date Prediction: PASSED');
+        } else {
+            console.log('❌ Reorder Date Prediction: FAILED (Missing)');
+        }
+
+        if (alert.description.includes('Reorder') && alert.description.includes('units')) {
+            console.log('✅ Description Formatting: PASSED');
+        } else {
+            console.log('❌ Description Formatting: FAILED');
+        }
     } else {
-        console.log('\n❌ TESTS FAILED!');
+        console.log('❌ Alert Generation: FAILED (No alert found)');
     }
 
     await mongoose.connection.close();

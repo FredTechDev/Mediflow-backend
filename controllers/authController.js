@@ -66,13 +66,13 @@ const register = async (req, res, next) => {
 
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, role } = req.body;
 
-    // Validate email & password
-    if (!email || !password) {
+    // Validate email, password & role
+    if (!email || !password || !role) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide an email and password'
+        message: 'Please provide email, password and select a role'
       });
     }
 
@@ -82,7 +82,15 @@ const login = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Role Verification
+    if (user.role !== role) {
+      return res.status(401).json({
+        success: false,
+        message: `This account is not registered as a ${role.replace('_', ' ')}`
       });
     }
 
@@ -92,7 +100,7 @@ const login = async (req, res, next) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid email or password'
       });
     }
 
