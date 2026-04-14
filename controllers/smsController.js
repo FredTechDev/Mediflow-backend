@@ -35,10 +35,10 @@ const processSMS = async (req, res) => {
     const previousStock = inventory.currentStock;
     
     // Add to consumption history
+    // Note: recordedBy is omitted here as SMS updates are not tied to a specific User ID
     inventory.consumptionHistory.push({
       date: new Date(),
       quantity: Math.max(0, previousStock - validation.currentStock),
-      recordedBy: 'sms',
       notes: `Auto-updated via SMS from ${from}`
     });
     
@@ -100,16 +100,23 @@ const getSMSHistory = async (req, res) => {
 };
 
 const simulateSMS = async (req, res) => {
-  const { message, from = '+254700000000' } = req.body;
-  
-  const mockReq = { body: { message, from, timestamp: new Date() } };
-  const mockRes = {
-    status: function(s) { this.statusCode = s; return this; },
-    json: function(j) { this.body = j; return this; }
-  };
-  
-  await exports.processSMS(mockReq, mockRes);
-  res.status(mockRes.statusCode || 200).json(mockRes.body);
+  try {
+    const { message, from = '+254700000000' } = req.body;
+
+    const mockReq = { body: { message, from, timestamp: new Date() } };
+    let mockStatusCode = 200;
+    let mockBody = {};
+
+    const mockRes = {
+      status: function(s) { mockStatusCode = s; return this; },
+      json: function(j) { mockBody = j; return this; }
+    };
+
+    await processSMS(mockReq, mockRes);
+    res.status(mockStatusCode).json(mockBody);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 };
 
 module.exports = {processSMS, getSMSHistory, simulateSMS}

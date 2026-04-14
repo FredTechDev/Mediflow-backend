@@ -62,11 +62,14 @@ class PredictionService {
 
   static checkExpiryStatus(expiryDate) {
     if (!expiryDate) return 'safe';
-    
+
     const today = new Date();
     const diffDays = Math.ceil((new Date(expiryDate) - today) / (1000 * 60 * 60 * 24));
 
-    if (diffDays <= 0) return 'expired';
+    // Note: 'expired' is intentionally mapped to 'expires_soon' to stay within the
+    // Inventory schema enum ['safe', 'warning', 'expires_soon'].
+    // The expiryDate field itself is the source of truth for expiry checks.
+    if (diffDays <= 0) return 'expires_soon'; // Already expired
     if (diffDays <= 7) return 'expires_soon';
     if (diffDays <= 30) return 'warning';
     return 'safe';
@@ -137,15 +140,18 @@ class PredictionService {
       const formattedDate = prediction.reorderDate ? new Date(prediction.reorderDate).toLocaleDateString() : 'ASAP';
       description = `Current Stock: ${inventoryItem.currentStock}. Expected Stockout in ${prediction.daysLeft} days. ` +
                     `Action: Reorder ${prediction.reorderAmount} units by ${formattedDate}.`;
-    } else if (prediction.expiryStatus === 'expired') {
-      alertType = 'expiry';
-      title = `DRUG EXPIRED: ${inventoryItem.drugName}`;
-      description = `Batch ${inventoryItem.batchNumber || 'N/A'} has expired. Remove from stock immediately.`;
     } else if (prediction.expiryStatus === 'expires_soon') {
       alertType = 'expiry';
       severity = 'high';
-      title = `Expiring Soon: ${inventoryItem.drugName}`;
-      description = `Drug will expire on ${new Date(inventoryItem.expiryDate).toLocaleDateString()}.`;
+      const isExpired = inventoryItem.expiryDate && new Date(inventoryItem.expiryDate) < new Date();
+      if (isExpired) {
+        title = `DRUG EXPIRED: ${inventoryItem.drugName}`;
+        description = `Batch ${inventoryItem.batchNumber || 'N/A'} has expired. Remove from stock immediately.`;
+        severity = 'critical';
+      } else {
+        title = `Expiring Soon: ${inventoryItem.drugName}`;
+        description = `Drug will expire on ${new Date(inventoryItem.expiryDate).toLocaleDateString()}.`;
+      }
     }
 
     if (!alertType) return;

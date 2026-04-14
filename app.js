@@ -10,6 +10,7 @@ const redistributionRoutes = require('./routes/redistribution');
 const authRoutes = require('./routes/auth');
 const prescriptionRoutes = require('./routes/prescription');
 const patientRoutes = require('./routes/patient');
+const adminRoutes = require('./routes/admin');
 const { errorHandler } = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
 const cron = require('node-cron');
@@ -36,7 +37,7 @@ app.use(compression());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://yourfrontend.com'] 
-    : '*',
+    : ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'],
   credentials: true
 }));
 
@@ -65,6 +66,7 @@ app.use('/api/redistribution', redistributionRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/patients', patientRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

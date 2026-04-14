@@ -107,7 +107,7 @@ exports.getPrescriptionById = async (req, res) => {
 
     const items = await PrescriptionItem.find({ prescriptionId: prescription._id });
 
-    res.json({ success: true, data: { ...prescription._doc, items } });
+    res.json({ success: true, data: { ...prescription.toObject(), items } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

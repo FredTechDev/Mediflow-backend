@@ -25,9 +25,10 @@ const updateStock = async (req, res) => {
       inventory.consumptionHistory.push({
         date: new Date(),
         quantity: quantityConsumed,
-        recordedBy: 'api'
+        recordedBy: req.user ? req.user.id : undefined
       });
-      inventory.currentStock -= quantityConsumed;
+      // Clamp stock to prevent negative values
+      inventory.currentStock = Math.max(0, inventory.currentStock - quantityConsumed);
     } else if (currentStock !== undefined) {
       inventory.currentStock = currentStock;
     }

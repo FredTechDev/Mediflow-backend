@@ -34,7 +34,7 @@ const facilitySchema = new mongoose.Schema({
   },
   facilityType: {
     type: String,
-    enum: ['hospital', 'health_center', 'dispensary', 'clinic'],
+    enum: ['hospital', 'health_center', 'dispensary', 'clinic', 'warehouse'],
     required: true
   },
   level: {

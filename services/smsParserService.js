@@ -26,7 +26,7 @@ class SMSParserService {
         confidence: 'high'
       };
     }
-Y
+
     const pattern3 = /([a-z]+)\s+(\d+)\s+at\s+(\w+)/i;
     match = normalized.match(pattern3);
 

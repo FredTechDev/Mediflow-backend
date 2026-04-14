@@ -146,7 +146,8 @@ const requestUrgentSupply = async (req, res) => {
     // Create a high-priority alert for redistribution
     const alert = await Alert.create({
       facilityId,
-      inventoryId: inventory ? inventory._id : null,
+      // Only include inventoryId if a valid inventory record was found
+      ...(inventory && { inventoryId: inventory._id }),
       type: 'low_stock',
       severity: 'critical',
       title: `URGENT STOCK REQUEST: ${drugName}`,
